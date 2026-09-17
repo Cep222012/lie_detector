@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Детектор лжи — ЦБА</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1220;
+    color: #e8ecf5;
+    line-height: 1.5;
+    padding: 16px;
+  }
+  .wrap { max-width: 800px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 8px 0 4px; letter-spacing: 0.3px; }
+  h2 {
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #8b93ad;
+    margin: 22px 0 6px;
+    font-weight: 600;
+  }
+  .sub { color: #8b93ad; font-size: 13px; margin-bottom: 16px; }
+  .card {
+    background: #171b2e;
+    border: 1px solid #262c45;
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  label.crit {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 9px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  label.crit:hover { background: #1e2338; }
+  label.crit input {
+    margin-top: 4px;
+    width: 20px; height: 20px;
+    accent-color: #5b8def;
+    flex-shrink: 0;
+  }
+  .num {
+    display: inline-block;
+    min-width: 24px;
+    color: #5b8def;
+    font-weight: 600;
+  }
+  .title { font-weight: 600; }
+  .desc { font-size: 13px; color: #9aa3bd; margin-top: 2px; }
+  input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    background: #10131f;
+    border: 1px solid #262c45;
+    border-radius: 10px;
+    color: #e8ecf5;
+    font-size: 15px;
+    outline: none;
+  }
+  input[type="text"]:focus { border-color: #5b8def; }
+  .bar {
+    height: 12px;
+    background: #10131f;
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 10px 0 12px;
+    border: 1px solid #262c45;
+  }
+  .fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #d94f4f, #e8c14a, #4ec97a);
+    transition: width 0.25s;
+  }
+  .score { font-size: 22px; font-weight: 700; }
+  .score small { color: #8b93ad; font-weight: 400; font-size: 14px; }
+  .verdict {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #10131f;
+    border-left: 4px solid #5b8def;
+    font-size: 15px;
+  }
+  .verdict.warn { border-left-color: #d94f4f; }
+  .verdict.ok { border-left-color: #4ec97a; }
+  button {
+    background: #5b8def;
+    color: #fff;
+    border: none;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 8px;
+    margin-top: 8px;
+  }
+  button.ghost {
+    background: transparent;
+    border: 1px solid #3a4363;
+    color: #c3cbe0;
+  }
+  button:active { opacity: 0.85; }
+  .footer { color: #6c7490; font-size: 12px; margin-top: 24px; text-align: center; padding-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Детектор лжи</h1>
+  <div class="sub">Оценка правдоподобия показаний по методике ЦБА (Criteria-Based Content Analysis) — 19 критериев в 5 блоках</div>
+
+  <div class="card">
+    <input type="text" id="subject" placeholder="Имя / описание показаний (необязательно)">
+  </div>
+
+  <div id="criteria"></div>
+
+  <div class="card">
+    <div class="score"><span id="count">0</span> <small>из 19 критериев присутствует</small></div>
+    <div class="bar"><div class="fill" id="fill"></div></div>
+    <div class="verdict" id="verdict">Отметьте критерии, которые вы наблюдаете в показаниях.</div>
+    <button id="save">Сохранить</button>
+    <button class="ghost" id="reset">Сбросить</button>
+    <button class="ghost" id="copy">Скопировать отчёт</button>
+  </div>
+
+  <div class="footer">Инструмент не является доказательством. Используй как вспомогательную шкалу.</div>
+</div>
+
+<script>
+// ─── ЦБА / CBCA — 19 критериев в 5 блоках ───
+const CBCA = [
+  { block: "I. Общие характеристики", items: [
+    ["Логическая структура", "Показания логичны, связны, имеют смысл. История могла иметь место в реальности в том виде, в котором описана."],
+    ["Неструктурированное изложение (спонтанность)", "Рассказ льётся сам, без предварительной схемы. Считается лучшим индикатором правдоподобия."],
+    ["Количество деталей", "Объём и качество деталей адекватны природе самого события — не слишком мало и не слишком много."]
+  ]},
+  { block: "II. Специфическое содержание", items: [
+    ["Встраивание в контекст", "Показания переплетены с повседневными обстоятельствами, привязаны к личному опыту и времени."],
+    ["Описание взаимодействий", "Есть действия людей: «я сказал ему уйти, но он не ушёл»."],
+    ["Воспроизведение разговоров", "Спонтанно упомянутые дословные фрагменты диалога."],
+    ["Неожиданные осложнения", "«Тут откуда ни возьмись…» — непредвиденный поворот во время события."]
+  ]},
+  { block: "III. Особенности содержания", items: [
+    ["Необычные подробности", "Детали, которые могли быть известны только тому, кто лично присутствовал."],
+    ["Избыточные (второстепенные) подробности", "Лишние, не относящиеся к сути детали, о которых человек говорит сам."],
+    ["Точно переданные, но не понятые детали", "Человек повторяет что-то, не понимая смысла (типично для детей)."],
+    ["Связанные внешние ассоциации", "Упоминания событий, людей, обстоятельств за пределами самого эпизода."],
+    ["Описание субъективного психического состояния", "«Я испугался», «мне было стыдно», «я растерялся»."],
+    ["Приписывание психического состояния преступнику", "«Он был в ярости», «ей было страшно» — состояние другого участника."]
+  ]},
+  { block: "IV. Содержание, связанное с мотивацией", items: [
+    ["Спонтанные исправления", "«Нет, подождите, это было в среду, а не во вторник»."],
+    ["Признание недостатка памяти", "«Не помню точно», «не уверен в деталях»."],
+    ["Сомнения в собственных показаниях", "«Может, я что-то путаю» — сомнение в себе без внешнего давления."],
+    ["Самоуничижение", "Признание собственных неблаговидных поступков или слабостей."],
+    ["Оправдание преступника", "«Я его не виню», «он не хотел» — снисхождение к другой стороне."]
+  ]},
+  { block: "V. Детали, характерные для преступления", items: [
+    ["Детали, характерные для типа преступления", "Специфические подробности, обычно сопутствующие именно таким эпизодам."]
+  ]}
+];
+
+// ─── Рендер ───
+const box = document.getElementById('criteria');
+let idx = 0;
+CBCA.forEach(g => {
+  const h = document.createElement('h2');
+  h.textContent = g.block;
+  box.appendChild(h);
+
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  g.items.forEach(([title, desc]) => {
+    idx++;
+    const l = document.createElement('label');
+    l.className = 'crit';
+    l.innerHTML = `
+      <input type="checkbox" data-i="${idx-1}">
+      <div>
+        <div class="title"><span class="num">${idx}.</span>${title}</div>
+        <div class="desc">${desc}</div>
+      </div>`;
+    card.appendChild(l);
+  });
+  box.appendChild(card);
+});
+
+const checks  = () => [...document.querySelectorAll('input[type=checkbox]')];
+const countEl = document.getElementById('count');
+const fillEl  = document.getElementById('fill');
+const verdict = document.getElementById('verdict');
+
+function update() {
+  const n = checks().filter(c => c.checked).length;
+  countEl.textContent = n;
+  fillEl.style.width = (n / 19 * 100) + '%';
+
+  verdict.classList.remove('ok', 'warn');
+  let text;
+  if (n <= 5) {
+    verdict.classList.add('warn');
+    text = "Мало признаков правдоподобия. Показания выглядят шаблонно или заученно.";
+  } else if (n <= 10) {
+    text = "Смешанная картина. Отдельные признаки живого опыта есть, но их недостаточно для уверенного вывода.";
+  } else if (n <= 14) {
+    verdict.classList.add('ok');
+    text = "Умеренно правдоподобно. Присутствует значительная часть критериев живой памяти.";
+  } else {
+    verdict.classList.add('ok');
+    text = "Высокое правдоподобие. Показания насыщены признаками личного опыта.";
+  }
+  verdict.textContent = `Присутствует ${n} из 19 критериев. ${text}`;
+}
+
+document.body.addEventListener('change', e => {
+  if (e.target.type === 'checkbox') update();
+});
+
+document.getElementById('reset').onclick = () => {
+  checks().forEach(c => c.checked = false);
+  document.getElementById('subject').value = '';
+  update();
+};
+
+document.getElementById('copy').onclick = () => {
+  const name = document.getElementById('subject').value.trim() || '(без названия)';
+  let out = `Детектор лжи — отчёт ЦБА\nОбъект: ${name}\nДата: ${new Date().toLocaleString()}\n\n`;
+  let i = 0;
+  CBCA.forEach(g => {
+    out += `${g.block}\n`;
+    g.items.forEach(([t]) => {
+      out += `${checks()[i].checked ? '[x]' : '[ ]'} ${i+1}. ${t}\n`;
+      i++;
+    });
+    out += '\n';
+  });
+  const n = checks().filter(c => c.checked).length;
+  out += `Итог: ${n}/19\n${verdict.textContent}`;
+
+  navigator.clipboard.writeText(out).then(
+    () => alert('Отчёт скопирован в буфер обмена'),
+    () => alert('Не удалось скопировать.')
+  );
+};
+
+document.getElementById('save').onclick = () => {
+  const data = {
+    subject: document.getElementById('subject').value,
+    checked: checks().map(c => c.checked)
+  };
+  localStorage.setItem('cbcaSave', JSON.stringify(data));
+  alert('Сохранено в браузере');
+};
+
+(function load() {
+  try {
+    const raw = localStorage.getItem('cbcaSave');
+    if (!raw) return update();
+    const d = JSON.parse(raw);
+    document.getElementById('subject').value = d.subject || '';
+    (d.checked || []).forEach((v, i) => { if (checks()[i]) checks()[i].checked = v; });
+  } catch(e) {}
+  update();
+})();
+</script>
+</body>
+</html>
